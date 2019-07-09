@@ -29,7 +29,7 @@ Route::get('/dns/check/{domain?}', function($domain=""){
     }
 });
 
-Route::get('/dns/{domain?}', 'CyberPanel@getDnsRecords');
+Route::get('/dns/{domain?}', 'CyberPanel@isValidDomain');
 
 Route::get('/test', function(){
     abort(404);

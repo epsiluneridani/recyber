@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use RemotelyLiving\PHPDNS\Resolvers;
 
 class CyberPanel extends Controller
 {
@@ -114,19 +115,104 @@ class CyberPanel extends Controller
             );
     }
     
-    public function getDnsRecords($domain){
-        $nameserver = dns_get_record($domain, DNS_NS);
-        $a_record = dns_get_record($domain, DNS_A);
-        dd(array('nameserver'=>$nameserver,'a'=>$a_record));
+    public function getDnsRecords($domain, $type = "A", $first = TRUE){
+        $googleResolver = new Resolvers\GoogleDNS();
+        $cloudflareResolver = new Resolvers\CloudFlare();
+        $localResolver = new Resolvers\LocalSystem();
+        $chainResolver = new Resolvers\Chain($cloudflareResolver, $googleResolver, $localResolver);
+        $records = $chainResolver->randomly()->getRecords($domain,$type);
+        
+        if($records->count() <= 0) {
+            return NULL;
+        }
+        
+        if($first){
+            return $records->pickFirst()->toArray();
+        } else {
+            $formatted = array();
+            foreach($records as $record){
+                $formatted[] = $record->toArray();
+            }
+            return $formatted;
+            
+            //dd($formatted); //->toArray());
+            //return 
+            
+            
+        }
+        
+        
+        
+        //dd($records->find(1));
+        //dd($records);
+        //$nameserver = dns_get_record($domain, DNS_NS);
+        //$a_record = dns_get_record($domain, DNS_A);
+        //dd(array('nameserver'=>$nameserver,'a'=>$a_record));
     }
     
-    public function isValid($domain)
+    public function isValidNSRecord($domain, $strict = TRUE)
     {
-        $client_domain = $this->getDnsRecords($domain);
-        $server_domain = $this->getDnsRecords($this->server_hostname);
+        $client_domains = $this->getDnsRecords($domain, "NS", FALSE);
+        $server_domains = $this->getDnsRecords($this->server_hostname, "NS", FALSE);
         
+        $server_ns_servers = NULL;
+        foreach($server_domains as $server_domain){
+            $server_ns_servers[] = $server_domain['data'];
+        }
         
+        $client_ns_servers = NULL;
+        $missing = FALSE;
+        if($client_domains)
+        {
+            
+            foreach($client_domains as $client_domain){
+                $client_ns_servers[] = $client_domain['data'];
+            }
+            
+            $checked = array();
+            foreach($server_ns_servers as $server_ns_server){
+                $result = in_array($server_ns_server, $client_ns_servers);
+                $checked[$server_ns_server] = $result;
+                if(!$result){
+                    $missing = TRUE;
+                }
+            }
+        } else {
+            $missing = TRUE;
+        }
         
+        return array('current'=>$client_ns_servers, 'requires' => $server_ns_servers, 'result' => !$missing);
+        
+        //$result = ($client_domain['data'] == $server_domain['data']) ? TRUE : FALSE;
+        
+        //$result = in_array($client_domain['data'], $server_ns_servers);
+        
+        //return array('current' => $client_domain['data'], 'requires' => $server_ns_servers, 'result' => $result);
+        
+        //return ($client_domain['data'] == $server_domain['data']) ? TRUE : FALSE;
+        
+    }
+    
+    public function isValidARecord($domain){
+        $client_domain = $this->getDnsRecords($domain, "A");
+        $server_domain = $this->getDnsRecords($this->server_hostname, "A");
+        
+        $result = (!empty($client_domain) && $client_domain['IPAddress'] == $server_domain['IPAddress']) ? TRUE : FALSE;
+        
+        return array('current' => (!empty($client_domain)) ? $client_domain['IPAddress'] : NULL, 'requires' => $server_domain['IPAddress'], 'result' => $result);
+        
+        //return ($client_domain['IPAddress'] == $server_domain['IPAddress']) ? TRUE : FALSE;
+    }
+    
+    public function isValidDomain($domain)
+    {
+        $this->server_hostname = "zbyte.dns-cloud.net";
+        $ns = $this->isValidNSRecord($domain);
+        $a = $this->isValidARecord($domain);
+        $result = ($ns['result'] OR $a['result']) ? TRUE : FALSE;
+        return $result;
+        //dd(array('ns'=>$ns,'a'=>$a,'result'=>$result));
+        //return ($this->isValidNSRecord($domain) OR $this->isValidARecord($domain)) ? TRUE : FALSE;
     }
     
 }
