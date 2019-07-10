@@ -215,4 +215,33 @@ class CyberPanel extends Controller
         //return ($this->isValidNSRecord($domain) OR $this->isValidARecord($domain)) ? TRUE : FALSE;
     }
     
+    public function domain_setup(Request $req)
+    {
+        //dd($req->method());
+        $response = array();
+        if($req->method()=== "POST"){
+            //$validated_data = $req->validate([
+            //    'domain' => 'required|url'    
+            //]);
+            $validate = $req->validate([
+                'domain' => [
+                    'required',
+                    function ($attribute, $value, $fail) {
+                        $is_valid = preg_match(
+                            "/^([a-zA-Z0-9][a-zA-Z0-9-_]*\.)*[a-zA-Z0-9]*[a-zA-Z0-9-_]*[[a-zA-Z0-9]+$/", $value
+                        );
+                        if(!$is_valid){
+                            $fail('The :attribute must be a valid domain without an http 
+            protocol e.g. google.com, www.google.com');
+                        }
+                        if(!$this->isValidDomain($value)){
+                            $fail('The :attribute must have a valid NS or A record.');
+                        }
+                    },
+                ],
+            ]);
+        }
+        return view('setup.domain', array('response'=>$response));
+    }
+    
 }
