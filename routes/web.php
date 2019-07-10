@@ -29,6 +29,8 @@ Route::get('/dns/check/{domain?}', function($domain=""){
     }
 });
 
+Route::match(['GET','POST'],'/setup/domain', 'CyberPanel@domain_setup');
+
 Route::get('/dns/{domain?}', 'CyberPanel@isValidDomain');
 
 Route::get('/test', function(){
